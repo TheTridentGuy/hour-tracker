@@ -12,4 +12,5 @@ model User {
   slack_id String @id
   signed_in Boolean @default(false)
   signin_time DateTime?
+  total_hours Float @default(0)
 }
