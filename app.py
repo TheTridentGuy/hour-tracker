@@ -17,7 +17,9 @@ app = App(token=os.environ["SLACK_BOT_TOKEN"])
 client = app.client
 
 
-MAIN_CHANNEL = os.environ["SLACK_MAIN_CHANNEL"]
+SLACK_MAIN_CHANNEL = os.environ["SLACK_MAIN_CHANNEL"]
+SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 
 @app.command("/si")
@@ -39,6 +41,7 @@ def signin(ack, respond, command):
             "signed_in": True,
             "signin_time": datetime.datetime.now()
         })
+        log(f":information_source: <@{slack_id}> signed in.")
         respond(":white_check_mark: You've been signed in.")
     else:
         respond(":x: You're already signed in.")
@@ -60,22 +63,10 @@ def signout(ack, respond, command):
             "signed_in": False,
             "total_hours": user.total_hours + new_hours
         })
+        log(f":information_source: <@{slack_id}> signed out.")
         respond(f":white_check_mark: You've been signed out. This session you logged {new_hours:.2f} hours, and you now have {user.total_hours:.2f} hours.")
     else:
         respond(":x: You aren't signed in.")
-
-
-def signout_all_users():
-    users = db.user.find_many(where={
-        "signed_in": True
-    })
-    for user in users:
-        db.user.update(where={
-            "slack_id": user.slack_id
-        }, data={
-            "signed_in": False
-        })
-        client.chat_postMessage(channel=user.slack_id, text=":clown_face: Hi, you forgot to sign out today. Better luck next time!")
 
 
 @app.command("/ss")
@@ -94,15 +85,37 @@ def signin_status(ack, respond, command):
         respond(f":large_red_square: You're signed out, and have a total of {user.total_hours:.2f} hours.")
 
 
-schedule.every().day.at("00:00").do(signout_all_users)
+def log(message):
+    client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text=message)
+
+
+def signout_all_users():
+    users = db.user.find_many(where={
+        "signed_in": True
+    })
+    for user in users:
+        db.user.update(where={
+            "slack_id": user.slack_id
+        }, data={
+            "signed_in": False
+        })
+        client.chat_postMessage(channel=user.slack_id, text=":clown_face: Hi, you forgot to sign out today. Better luck next time!")
+
+
+def send_backup():
+    assert DATABASE_URL.startswith("file:")
+    database_path = DATABASE_URL[5:]
+    client.files_upload_v2(channel=SLACK_ADMIN_CHANNEL, file=database_path)
 
 
 def schedule_loop():
     while True:
         schedule.run_pending()
-        time.sleep(1)
+        time.sleep(60)
 
 
+schedule.every().day.at("00:00").do(signout_all_users)
+schedule.every().day.at("00:00").do(send_backup)
 schedule_loop_thread = threading.Thread(target=schedule_loop)
 schedule_loop_thread.start()
 SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
