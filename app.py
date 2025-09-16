@@ -2,7 +2,7 @@ import datetime
 import os
 import threading
 import time
-
+import re
 import dotenv
 import schedule
 from slack_bolt import App
@@ -143,11 +143,40 @@ def hours(ack, respond, command):
                 "text": f"Triggered with `/hours` by <@{slack_id}>"
             }]
         }]
-        from pprint import pprint
-        pprint(blocks)
         client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text="Hour Report", blocks=blocks)
     else:
-        respond(f"This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
+        respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
+
+
+@app.command("/amend")
+def amend(ack, respond, command):
+    ack()
+    channel = command["channel_id"]
+    slack_id = command["user_id"]
+    args = command["text"].split(" ")
+    if channel == SLACK_ADMIN_CHANNEL:
+        try:
+            assert len(args) == 2
+            amendee_slack_id = re.findall(r"(?<=<@)[A-Z0-9]+", args[0])[0]
+            ammendement = float(args[1])
+            amendee = db.user.find_first(where={
+                "slack_id": amendee_slack_id
+            })
+            if not amendee:
+                amendee = db.user.create({
+                    "slack_id": slack_id
+                })
+            db.user.update(where={
+                "slack_id": amendee_slack_id
+            }, data={
+                "total_hours": amendee.total_hours + ammendement
+            })
+            log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
+            respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendement:.2f} hours.")
+        except (AssertionError, ValueError) as e:
+            respond(f":x: Unable to ammend hours, you probably didn't format the command correctly.")
+    else:
+        respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
 
 
 def log(message):
