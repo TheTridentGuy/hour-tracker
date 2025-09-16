@@ -17,7 +17,7 @@ dotenv.load_dotenv()
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 client = app.client
 
-SLACK_MAIN_CHANNEL = os.environ["SLACK_MAIN_CHANNEL"]
+
 SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
 DATABASE_URL = os.environ["DATABASE_URL"]
 
