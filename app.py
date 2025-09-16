@@ -1,12 +1,13 @@
 import datetime
 import os
+from datetime import tzinfo
+
 import dotenv
 import schedule
 import time
 import threading
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-
 
 os.system("prisma db push")
 import prisma
@@ -23,7 +24,6 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 
 
 @app.command("/si")
-@app.command("/signin")
 def signin(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -48,7 +48,6 @@ def signin(ack, respond, command):
 
 
 @app.command("/so")
-@app.command("/signout")
 def signout(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -70,7 +69,6 @@ def signout(ack, respond, command):
 
 
 @app.command("/ss")
-@app.command("/signin-status")
 def signin_status(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -80,9 +78,24 @@ def signin_status(ack, respond, command):
     if user is None:
         respond(":bangbang: You've never signed in your life.")
     elif user.signed_in:
-        respond(f":large_green_square: You've been signed in since {user.signin_time.strftime('%H:%M')}, and have a total of {user.total_hours:.2f} hours.")
+        respond(f":large_green_square: You've been signed in since {user.signin_time.replace(tzinfo=None).strftime('%H:%M')}, and have a total of {user.total_hours:.2f} hours.")
     else:
         respond(f":large_red_square: You're signed out, and have a total of {user.total_hours:.2f} hours.")
+
+
+@app.command("/hours")
+def hours(ack, respond, command):
+    ack()
+    slack_id = command["user_id"]
+    channel = command["channel_id"]
+    if channel == SLACK_ADMIN_CHANNEL:
+        users = db.user.find_many()
+        text = f"All users and their hours as requested by <@{slack_id}>:\n"
+        text += "\n".join([f" - <@{user.slack_id}>: {user.total_hours:.2f} hours" for user in users])
+        client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text=text)
+    else:
+        respond(f"This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
+
 
 
 def log(message):
