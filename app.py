@@ -99,6 +99,18 @@ def hours(ack, respond, command):
                     "type": "rich_text_section",
                     "elements": [{
                         "type": "text",
+                        "text": "Signed In?",
+                        "style": {
+                            "bold": True
+                        }
+                    }]
+                }]
+            },{
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
                         "text": "User",
                         "style": {
                             "bold": True
@@ -118,6 +130,15 @@ def hours(ack, respond, command):
                     }]
                 }]
             }]] + [[{
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "emoji",
+                        "name": "large_green_square" if user.signed_in else "large_red_square"
+                    }]
+                }]
+            },{
                 "type": "rich_text",
                 "elements": [{
                     "type": "rich_text_section",
