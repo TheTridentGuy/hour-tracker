@@ -91,57 +91,60 @@ def hours(ack, respond, command):
     channel = command["channel_id"]
     if channel == SLACK_ADMIN_CHANNEL:
         users = db.user.find_many()
-        blocks = [
-            {
+        blocks = [{
+            "type": "table",
+            "rows": [[{
                 "type": "rich_text",
-                "elements": [
-                    {
-                        "type": "rich_text_section",
-                        "elements": [
-                            {
-                                "type": "text",
-                                "style": {
-                                    "code": True
-                                },
-                                "text": f"/hours"
-                            },
-                            {
-                                "type": "text",
-                                "text": f" run by "
-                            },
-                            {
-                                "type": "user",
-                                "user_id": slack_id
-                            },
-                            {
-                                "type": "text",
-                                "text": f":"
-                            }
-                        ]
-                    },
-                    {
-                        "type": "rich_text_list",
-                        "style": "bullet",
-                        "indent": 0,
-                        "elements": [
-                            ({
-                                "type": "rich_text_section",
-                                "elements": [
-                                    {
-                                        "type": "user",
-                                        "user_id": user.slack_id
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": f": {user.total_hours:.2f} hours"
-                                    }
-                                ]
-                            }) for user in users
-                        ]
-                    }
-                ]
-            }
-        ]
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": "User",
+                        "style": {
+                            "bold": True
+                        }
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": "Hours",
+                        "style": {
+                            "bold": True
+                        }
+                    }]
+                }]
+            }]] + [[{
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "user",
+                        "user_id": user.slack_id
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": f"{user.total_hours:.2f}"
+                    }]
+                }]
+            }] for user in users]
+        }, {
+            "type": "context",
+            "elements": [{
+                "type": "mrkdwn",
+                "text": f"Triggered with `/hours` by <@{slack_id}>"
+            }]
+        }]
+        from pprint import pprint
+        pprint(blocks)
         client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text="Hour Report", blocks=blocks)
     else:
         respond(f"This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
