@@ -1,22 +1,21 @@
 import datetime
 import os
-from datetime import tzinfo
+import threading
+import time
 
 import dotenv
 import schedule
-import time
-import threading
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 os.system("prisma db push")
 import prisma
+
 db = prisma.Prisma()
 db.connect()
 dotenv.load_dotenv()
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 client = app.client
-
 
 SLACK_MAIN_CHANNEL = os.environ["SLACK_MAIN_CHANNEL"]
 SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
@@ -44,7 +43,7 @@ def signin(ack, respond, command):
         log(f":information_source: <@{slack_id}> signed in.")
         respond(":white_check_mark: You've been signed in.")
     else:
-        respond(":x: You're already signed in.")
+        respond(":x: You're already signed in.  Try running `/so` to sign out.")
 
 
 @app.command("/so")
@@ -63,9 +62,10 @@ def signout(ack, respond, command):
             "total_hours": user.total_hours + new_hours
         })
         log(f":information_source: <@{slack_id}> signed out.")
-        respond(f":white_check_mark: You've been signed out. This session you logged {new_hours:.2f} hours, and you now have {user.total_hours:.2f} hours.")
+        respond(
+            f":white_check_mark: You've been signed out. This session you logged {new_hours:.2f} hours, and you now have {user.total_hours:.2f} hours.")
     else:
-        respond(":x: You aren't signed in.")
+        respond(":x: You aren't signed in. Try running `/si` to sign in.")
 
 
 @app.command("/ss")
@@ -76,9 +76,10 @@ def signin_status(ack, respond, command):
         "slack_id": slack_id
     })
     if user is None:
-        respond(":bangbang: You've never signed in your life.")
+        respond(":bangbang: You've never signed in your life. Try running `/si` to sign in.")
     elif user.signed_in:
-        respond(f":large_green_square: You've been signed in since {user.signin_time.replace(tzinfo=None).strftime('%H:%M')}, and have a total of {user.total_hours:.2f} hours.")
+        respond(
+            f":large_green_square: You've been signed in since {user.signin_time.replace(tzinfo=None).strftime('%H:%M')}, and have a total of {user.total_hours:.2f} hours.")
     else:
         respond(f":large_red_square: You're signed out, and have a total of {user.total_hours:.2f} hours.")
 
@@ -90,12 +91,60 @@ def hours(ack, respond, command):
     channel = command["channel_id"]
     if channel == SLACK_ADMIN_CHANNEL:
         users = db.user.find_many()
-        text = f"All users and their hours as requested by <@{slack_id}>:\n"
-        text += "\n".join([f" - <@{user.slack_id}>: {user.total_hours:.2f} hours" for user in users])
-        client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text=text)
+        blocks = [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "style": {
+                                    "code": True
+                                },
+                                "text": f"/hours"
+                            },
+                            {
+                                "type": "text",
+                                "text": f" run by "
+                            },
+                            {
+                                "type": "user",
+                                "user_id": slack_id
+                            },
+                            {
+                                "type": "text",
+                                "text": f":"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "rich_text_list",
+                        "style": "bullet",
+                        "indent": 0,
+                        "elements": [
+                            ({
+                                "type": "rich_text_section",
+                                "elements": [
+                                    {
+                                        "type": "user",
+                                        "user_id": user.slack_id
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f": {user.total_hours:.2f} hours"
+                                    }
+                                ]
+                            }) for user in users
+                        ]
+                    }
+                ]
+            }
+        ]
+        client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text="Hour Report", blocks=blocks)
     else:
         respond(f"This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
-
 
 
 def log(message):
@@ -112,7 +161,9 @@ def signout_all_users():
         }, data={
             "signed_in": False
         })
-        client.chat_postMessage(channel=user.slack_id, text=":clown_face: Hi, you forgot to sign out today. Better luck next time!")
+        log(f":information_source: DM'ed <@{user.slack_id}> about their failure to sign out.")
+        client.chat_postMessage(channel=user.slack_id,
+                                text=":man-facepalming: Hi, you forgot to sign out today. Better luck next time!")
 
 
 def send_backup():
