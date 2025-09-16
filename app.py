@@ -195,7 +195,7 @@ def amend(ack, respond, command):
             log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
             respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendement:.2f} hours.")
         except (AssertionError, ValueError) as e:
-            respond(f":x: Unable to ammend hours, you probably didn't format the command correctly.")
+            respond(f":x: Unable to amend hours, you probably didn't format the command correctly.")
     else:
         respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
 
@@ -228,7 +228,7 @@ def send_backup():
 def schedule_loop():
     while True:
         schedule.run_pending()
-        time.sleep(60)
+        time.sleep(30)
 
 
 schedule.every().day.at("00:00").do(signout_all_users)
