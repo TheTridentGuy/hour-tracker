@@ -20,6 +20,8 @@ client = app.client
 
 SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
 DATABASE_URL = os.environ["DATABASE_URL"]
+WEDNESDAY = 2
+FRIDAY = 4
 
 
 @app.command("/si")
@@ -55,6 +57,22 @@ def signout(ack, respond, command):
     })
     if user and user.signed_in:
         new_hours = (datetime.datetime.now() - user.signin_time.replace(tzinfo=None)).seconds / 3600
+        signin_weekday = user.signin_time.weekday()
+        if signin_weekday in [WEDNESDAY, FRIDAY] and (not user.last_special_day or not user.signin_time.date() == user.last_special_day.date()):
+            if signin_weekday == WEDNESDAY:
+                user = db.user.update(where={
+                    "slack_id": slack_id,
+                }, data={
+                    "wednesdays": user.wednesdays + 1,
+                    "last_special_day": datetime.datetime.now()
+                })
+            else:
+                user = db.user.update(where={
+                    "slack_id": slack_id,
+                }, data={
+                    "fridays": user.fridays + 1,
+                    "last_special_day": datetime.datetime.now()
+                })
         user = db.user.update(where={
             "slack_id": slack_id
         }, data={
@@ -129,6 +147,30 @@ def hours(ack, respond, command):
                         }
                     }]
                 }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": "Wednesdays",
+                        "style": {
+                            "bold": True
+                        }
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": "Fridays",
+                        "style": {
+                            "bold": True
+                        }
+                    }]
+                }]
             }]] + [[{
                 "type": "rich_text",
                 "elements": [{
@@ -154,6 +196,24 @@ def hours(ack, respond, command):
                     "elements": [{
                         "type": "text",
                         "text": f"{user.total_hours:.2f}"
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": f"{user.wednesdays}"
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": f"{user.fridays}"
                     }]
                 }]
             }] for user in users]
