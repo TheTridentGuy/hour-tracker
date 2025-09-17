@@ -1,8 +1,9 @@
 import datetime
 import os
+import re
 import threading
 import time
-import re
+
 import dotenv
 import schedule
 from slack_bolt import App
@@ -16,7 +17,6 @@ db.connect()
 dotenv.load_dotenv()
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 client = app.client
-
 
 SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -58,7 +58,8 @@ def signout(ack, respond, command):
     if user and user.signed_in:
         new_hours = (datetime.datetime.now() - user.signin_time.replace(tzinfo=None)).seconds / 3600
         signin_weekday = user.signin_time.weekday()
-        if signin_weekday in [WEDNESDAY, FRIDAY] and (not user.last_special_day or not user.signin_time.date() == user.last_special_day.date()):
+        if signin_weekday in [WEDNESDAY, FRIDAY] and (
+                not user.last_special_day or not user.signin_time.date() == user.last_special_day.date()):
             if signin_weekday == WEDNESDAY:
                 user = db.user.update(where={
                     "slack_id": slack_id,
@@ -123,7 +124,7 @@ def hours(ack, respond, command):
                         }
                     }]
                 }]
-            },{
+            }, {
                 "type": "rich_text",
                 "elements": [{
                     "type": "rich_text_section",
@@ -180,7 +181,7 @@ def hours(ack, respond, command):
                         "name": "large_green_square" if user.signed_in else "large_red_square"
                     }]
                 }]
-            },{
+            }, {
                 "type": "rich_text",
                 "elements": [{
                     "type": "rich_text_section",
@@ -254,7 +255,7 @@ def amend(ack, respond, command):
             })
             log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
             respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendement:.2f} hours.")
-        except (AssertionError, ValueError) as e:
+        except (AssertionError, ValueError):
             respond(f":x: Unable to amend hours, you probably didn't format the command correctly.")
     else:
         respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
