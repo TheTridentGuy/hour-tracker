@@ -206,7 +206,10 @@ def log(message):
 
 def signout_all_users():
     users = db.user.find_many(where={
-        "signed_in": True
+        "signed_in": True,
+        "signin_time": {
+            "lte": datetime.datetime.now() - datetime.timedelta(hours=12)
+        }
     })
     for user in users:
         db.user.update(where={
@@ -216,7 +219,7 @@ def signout_all_users():
         })
         log(f":information_source: DM'ed <@{user.slack_id}> about their failure to sign out.")
         client.chat_postMessage(channel=user.slack_id,
-                                text=":man-facepalming: Hi, you forgot to sign out today. Better luck next time!")
+                                text=":man-facepalming: Hi, you forgot to sign out. Better luck next time!")
 
 
 def send_backup():
@@ -228,10 +231,10 @@ def send_backup():
 def schedule_loop():
     while True:
         schedule.run_pending()
-        time.sleep(30)
+        time.sleep(1)
 
 
-schedule.every().day.at("00:00").do(signout_all_users)
+schedule.every().minute.do(signout_all_users)
 schedule.every().day.at("00:00").do(send_backup)
 schedule_loop_thread = threading.Thread(target=schedule_loop)
 schedule_loop_thread.start()
