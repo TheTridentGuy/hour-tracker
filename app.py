@@ -296,7 +296,7 @@ def schedule_loop():
 
 
 schedule.every().minute.do(signout_all_users)
-schedule.every().day.at("00:00").do(send_backup)
+schedule.every().day.at("07:00").do(send_backup)
 schedule_loop_thread = threading.Thread(target=schedule_loop)
 schedule_loop_thread.start()
 SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
