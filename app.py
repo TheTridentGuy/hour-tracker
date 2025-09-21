@@ -6,6 +6,7 @@ import time
 
 import dotenv
 import schedule
+from flask import Flask
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -15,8 +16,9 @@ import prisma
 db = prisma.Prisma()
 db.connect()
 dotenv.load_dotenv()
-app = App(token=os.environ["SLACK_BOT_TOKEN"])
-client = app.client
+bot = App(token=os.environ["SLACK_BOT_TOKEN"])
+api = Flask(__name__)
+client = bot.client
 
 SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -24,7 +26,7 @@ WEDNESDAY = 2
 FRIDAY = 4
 
 
-@app.command("/si")
+@bot.command("/si")
 def signin(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -42,13 +44,13 @@ def signin(ack, respond, command):
             "signed_in": True,
             "signin_time": datetime.datetime.now()
         })
-        log(f":information_source: <@{slack_id}> signed in.")
+        admin_channel_log(f":information_source: <@{slack_id}> signed in.")
         respond(":white_check_mark: You've been signed in.")
     else:
         respond(":x: You're already signed in.  Try running `/so` to sign out.")
 
 
-@app.command("/so")
+@bot.command("/so")
 def signout(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -80,14 +82,14 @@ def signout(ack, respond, command):
             "signed_in": False,
             "total_hours": user.total_hours + new_hours
         })
-        log(f":information_source: <@{slack_id}> signed out.")
+        admin_channel_log(f":information_source: <@{slack_id}> signed out.")
         respond(
             f":white_check_mark: You've been signed out. This session you logged {new_hours:.2f} hours, and you now have {user.total_hours:.2f} hours.")
     else:
         respond(":x: You aren't signed in. Try running `/si` to sign in.")
 
 
-@app.command("/ss")
+@bot.command("/ss")
 def signin_status(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -103,7 +105,7 @@ def signin_status(ack, respond, command):
         respond(f":large_red_square: You're signed out, and have a total of {user.total_hours:.2f} hours.")
 
 
-@app.command("/hours")
+@bot.command("/hours")
 def hours(ack, respond, command):
     ack()
     slack_id = command["user_id"]
@@ -230,7 +232,7 @@ def hours(ack, respond, command):
         respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
 
 
-@app.command("/amend")
+@bot.command("/amend")
 def amend(ack, respond, command):
     ack()
     channel = command["channel_id"]
@@ -253,7 +255,7 @@ def amend(ack, respond, command):
             }, data={
                 "total_hours": amendee.total_hours + ammendement
             })
-            log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
+            admin_channel_log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
             respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendement:.2f} hours.")
         except (AssertionError, ValueError):
             respond(f":x: Unable to amend hours, you probably didn't format the command correctly.")
@@ -261,7 +263,31 @@ def amend(ack, respond, command):
         respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
 
 
-def log(message):
+@api.route("/api/hours/<string:slack_id>")
+def api_hours(slack_id):
+    user_hours = db.user.find_first(where={
+        "slack_id": slack_id
+    })
+    return str(user_hours.total_hours if user_hours else 0)
+
+
+@api.route("/api/wednesdays/<string:slack_id>")
+def api_wednesdays(slack_id):
+    user_hours = db.user.find_first(where={
+        "slack_id": slack_id
+    })
+    return str(user_hours.wednesdays if user_hours else 0)
+
+
+@api.route("/api/fridays/<string:slack_id>")
+def api_fridays(slack_id):
+    user_hours = db.user.find_first(where={
+        "slack_id": slack_id
+    })
+    return str(user_hours.fridays if user_hours else 0)
+
+
+def admin_channel_log(message):
     client.chat_postMessage(channel=SLACK_ADMIN_CHANNEL, text=message)
 
 
@@ -278,7 +304,7 @@ def signout_all_users():
         }, data={
             "signed_in": False
         })
-        log(f":information_source: DM'ed <@{user.slack_id}> about their failure to sign out.")
+        admin_channel_log(f":information_source: DM'ed <@{user.slack_id}> about their failure to sign out.")
         client.chat_postMessage(channel=user.slack_id,
                                 text=":man-facepalming: Hi, you forgot to sign out. Better luck next time!")
 
@@ -299,5 +325,6 @@ schedule.every().minute.do(signout_all_users)
 schedule.every().day.at("07:00").do(send_backup)
 schedule_loop_thread = threading.Thread(target=schedule_loop)
 schedule_loop_thread.start()
-
-SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
+slack_bot_thread = threading.Thread(target=SocketModeHandler(bot, os.environ["SLACK_APP_TOKEN"]).start)
+slack_bot_thread.start()
+api.run(os.environ["API_HOST"], int(os.environ["API_PORT"]))
