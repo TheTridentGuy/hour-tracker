@@ -1,3 +1,4 @@
+flask
 dotenv~=0.9.9
 python-dotenv~=1.1.1
 schedule~=1.2.2
