@@ -1,11 +1,12 @@
+generator client {
+  provider             = "prisma-client-py"
+  recursive_type_depth = "5"
+  interface            = "sync"
+}
+
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-generator client {
-  provider             = "prisma-client-py"
-  interface            = "sync"
-  recursive_type_depth = 5
 }
 
 model User {
@@ -13,7 +14,8 @@ model User {
   signed_in        Boolean   @default(false)
   signin_time      DateTime?
   last_special_day DateTime?
-  total_hours      Float     @default(0)
+  fall_total_hours      Float     @default(0)
+  spring_total_hours      Float     @default(0)
   wednesdays       Int       @default(0)
   fridays          Int       @default(0)
 }

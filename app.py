@@ -6,7 +6,7 @@ import time
 
 import dotenv
 import schedule
-from flask import Flask
+from flask import Flask, abort
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -24,7 +24,11 @@ SLACK_ADMIN_CHANNEL = os.environ["SLACK_ADMIN_CHANNEL"]
 DATABASE_URL = os.environ["DATABASE_URL"]
 WEDNESDAY = 2
 FRIDAY = 4
+FALL_START_MONTH_DAY = (8, 1)  # August 1st
+FALL_END_MONTH_DAY = (1, 1)  # January 1st
 
+
+is_fall = lambda: [any([FALL_START_MONTH_DAY < (today.month, today.day), (today.month, today.day) < FALL_END_MONTH_DAY]) for today in [datetime.date.today()]][0]
 
 @bot.command("/si")
 def signin(ack, respond, command):
@@ -80,11 +84,11 @@ def signout(ack, respond, command):
             "slack_id": slack_id
         }, data={
             "signed_in": False,
-            "total_hours": user.total_hours + new_hours
+            "fall_total_hours" if is_fall() else "spring_total_hours": (user.fall_total_hours if is_fall() else user.spring_total_hours) + new_hours
         })
         admin_channel_log(f":information_source: <@{slack_id}> signed out.")
         respond(
-            f":white_check_mark: You've been signed out. This session you logged {new_hours:.2f} hours, and you now have {user.total_hours:.2f} hours.")
+            f":white_check_mark: You've been signed out. This session you logged {new_hours:.2f} hours, and you now have {user.fall_total_hours if is_fall() else user.spring_total_hours:.2f} hours this {'fall' if is_fall() else 'spring'}.")
     else:
         respond(":x: You aren't signed in. Try running `/si` to sign in.")
 
@@ -100,9 +104,9 @@ def signin_status(ack, respond, command):
         respond(":bangbang: You've never signed in your life. Try running `/si` to sign in.")
     elif user.signed_in:
         respond(
-            f":large_green_square: You've been signed in since {user.signin_time.replace(tzinfo=None).strftime('%H:%M')}, and have a total of {user.total_hours:.2f} hours.")
+            f":large_green_square: You've been signed in since {user.signin_time.replace(tzinfo=None).strftime('%H:%M')}, and have a total of {user.fall_total_hours if is_fall() else user.spring_total_hours:.2f} hours this {'fall' if is_fall() else 'spring'}.")
     else:
-        respond(f":large_red_square: You're signed out, and have a total of {user.total_hours:.2f} hours.")
+        respond(f":large_red_square: You're signed out, and have a total of {user.fall_total_hours if is_fall() else user.spring_total_hours:.2f} hours this {'fall' if is_fall() else 'spring'}.")
 
 
 @bot.command("/hours")
@@ -144,7 +148,19 @@ def hours(ack, respond, command):
                     "type": "rich_text_section",
                     "elements": [{
                         "type": "text",
-                        "text": "Hours",
+                        "text": "Fall Hours",
+                        "style": {
+                            "bold": True
+                        }
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": "Spring Hours",
                         "style": {
                             "bold": True
                         }
@@ -198,7 +214,16 @@ def hours(ack, respond, command):
                     "type": "rich_text_section",
                     "elements": [{
                         "type": "text",
-                        "text": f"{user.total_hours:.2f}"
+                        "text": f"{user.fall_total_hours:.2f}"
+                    }]
+                }]
+            }, {
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{
+                        "type": "text",
+                        "text": f"{user.spring_total_hours:.2f}"
                     }]
                 }]
             }, {
@@ -253,7 +278,7 @@ def amend(ack, respond, command):
             db.user.update(where={
                 "slack_id": amendee_slack_id
             }, data={
-                "total_hours": amendee.total_hours + ammendement
+                "fall_total_hours" if is_fall() else "spring_total_hours": amendee.total_hours + ammendement
             })
             admin_channel_log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
             respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendement:.2f} hours.")
@@ -263,28 +288,21 @@ def amend(ack, respond, command):
         respond(f":x: This can only be run in <#{SLACK_ADMIN_CHANNEL}>.")
 
 
-@api.route("/api/hours/<string:slack_id>")
-def api_hours(slack_id):
-    user_hours = db.user.find_first(where={
+@api.route("/api/<string:endpoint>/<string:slack_id>")
+def api_hours(endpoint, slack_id):
+    user = db.user.find_first(where={
         "slack_id": slack_id
     })
-    return str(user_hours.total_hours if user_hours else 0)
-
-
-@api.route("/api/wednesdays/<string:slack_id>")
-def api_wednesdays(slack_id):
-    user_hours = db.user.find_first(where={
-        "slack_id": slack_id
-    })
-    return str(user_hours.wednesdays if user_hours else 0)
-
-
-@api.route("/api/fridays/<string:slack_id>")
-def api_fridays(slack_id):
-    user_hours = db.user.find_first(where={
-        "slack_id": slack_id
-    })
-    return str(user_hours.fridays if user_hours else 0)
+    if endpoint == "fall_total_hours":
+        return str(user.fall_total_hours if user else 0)
+    if endpoint == "spring_total_hours":
+        return str(user.spring_total_hours if user else 0)
+    elif endpoint == "wednesdays":
+        return str(user.wednesdays if user else 0)
+    elif endpoint == "fridays":
+        return str(user.fridays if user else 0)
+    else:
+        abort(404)
 
 
 def admin_channel_log(message):
