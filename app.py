@@ -267,7 +267,7 @@ def amend(ack, respond, command):
         try:
             assert len(args) == 2
             amendee_slack_id = re.findall(r"(?<=<@)[A-Z0-9]+", args[0])[0]
-            ammendement = float(args[1])
+            ammendment = float(args[1])
             amendee = db.user.find_first(where={
                 "slack_id": amendee_slack_id
             })
@@ -278,10 +278,10 @@ def amend(ack, respond, command):
             db.user.update(where={
                 "slack_id": amendee_slack_id
             }, data={
-                "fall_total_hours" if is_fall() else "spring_total_hours": amendee.total_hours + ammendement
+                "fall_total_hours" if is_fall() else "spring_total_hours": (amendee.fall_total_hours if is_fall() else amendee.spring_total_hours) + ammendment
             })
-            admin_channel_log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendement} hours.")
-            respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendement:.2f} hours.")
+            admin_channel_log(f":information_source: <@{slack_id}> gave <@{amendee_slack_id}> {ammendment} hours.")
+            respond(f":white_check_mark: Gave <@{amendee_slack_id}> {ammendment:.2f} hours.")
         except (AssertionError, ValueError):
             respond(f":x: Unable to amend hours, you probably didn't format the command correctly.")
     else:
